@@ -1,0 +1,40 @@
+name: Deploy to AWS ECS
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Build with Maven
+        run: mvn clean package
+
+      - name: Authenticate with AWS ECR
+        run: |
+          aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws configure set region ap-south-1
+          aws ecr get-login-password | docker login --username AWS --password-stdin 533266986432.dkr.ecr.ap-south-1.amazonaws.com
+
+      - name: Build and Push Docker Image
+        run: |
+          docker build -t springboot-app .
+          docker tag springboot-app:latest 533266986432.dkr.ecr.ap-south-1.amazonaws.com/springboot-app:latest
+          docker push 533266986432.dkr.ecr.ap-south-1.amazonaws.com/springboot-app:latest
+
+      - name: Update ECS Task Definition
+        run: |
+          aws ecs update-service --cluster springboot-cluster --service springboot-service --force-new-deployment
